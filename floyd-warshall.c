@@ -34,6 +34,8 @@ int NAME_LENGTH = 5;
 
 int maxValueVertice = 0;
 int *vertices_2D_array;
+int *path_2D_array;
+
 typedef struct Edge {
     int v1,v2,w;
     struct Edge *next;
@@ -43,7 +45,8 @@ void    printGraph(Edge_t *head);
 void    freeGraph(Edge_t *head);
 int     getWeight(int u, int v);
 void    setWeight(int u, int v, int w);
-
+int     getPath(int u, int v);
+void    setPath(int u, int v, int k);
 
 
 void* loadGraph(int edges){
@@ -115,22 +118,26 @@ int initArray(Edge_t *head){
         return 0;
 
     vertices_2D_array = malloc(maxValueVertice*maxValueVertice*sizeof(int));
+    path_2D_array = malloc(maxValueVertice*maxValueVertice*sizeof(int));
 
     /* Set all weights to infinity (max value of 32 bit integer)*/
     for(int i = 0; i < maxValueVertice; i++){
         for(int j = 0; j < maxValueVertice; j++){
             vertices_2D_array[i * maxValueVertice + j] = INT32_MAX;
+            path_2D_array[i * maxValueVertice + j] = 0;
         }
     }
     /* Set weight/distance of (v,v) to 0*/
     for(int i = 0; i < maxValueVertice; i++){
         vertices_2D_array[i * maxValueVertice + i] = 0;
+        path_2D_array[i * maxValueVertice + i] = i+1;
     }
     /* Transfer initial weights from graph*/
     Edge_t *tmp = head;
     while(tmp->next != NULL){
         if(getWeight(tmp->v1,tmp->v2) > tmp->w){
             setWeight(tmp->v1,tmp->v2,tmp->w);
+            setPath(tmp->v1,tmp->v2,tmp->v1);
         }
         tmp = tmp->next;
     }
@@ -154,6 +161,7 @@ int floydWarshall(){
                         /* Found a "shorter" path from i to j through k*/
                         // printf("(%d,%d) previous w: %d, new w: %d through %d \n", i,j,getWeight(i,j), weightThroughK,k);
                         setWeight(i,j, weightThroughK);
+                        setPath(i,j, getPath(k,j));
                     }
                 }
             }
@@ -171,6 +179,44 @@ void setWeight(int u, int v, int w){
     // vertices_2D_array[(v-1) * maxValueVertice + (u-1)] = w;
 }
 
+int getPath(int u, int v){
+    /* Subtract 1 to get 0-index */
+    return path_2D_array[(u-1) * maxValueVertice + (v-1)];
+}
+
+void setPath(int u, int v, int k){
+    /* Subtract 1 to get 0-index */
+    path_2D_array[(u-1) * maxValueVertice + (v-1)] = k;
+}
+
+int* path(int u, int v){
+    int len = 3;
+    int *path;
+    int prev = getPath(u, v);
+    if(prev == 0){
+        int tmp[] = {0};
+        path = tmp;
+    }
+    else{
+        while(prev != u){
+            len++;
+            prev = getPath(u, prev);
+        }
+        prev = getPath(u, v);
+        int tmp[len];
+        tmp[0] = len;
+        /* store path from v to u */
+        tmp[--len] = v;
+        while(len-- > 2){
+            tmp[len] = getPath(u, tmp[len+1]);
+        }
+        tmp[1] = u;
+        path = tmp;
+    }
+
+    return path;
+}
+
 void printGraph(Edge_t *head){
     Edge_t *tmp = head;
     printf("Printing all edges:\n");
@@ -182,7 +228,7 @@ void printGraph(Edge_t *head){
 }
 
 /* Function for visually printing out the 2D-array with vertices and weights */
-void printArray(){
+void printArray(int *array){
     printf("  |1");
     for(int i = 1; i < maxValueVertice; i++)
         printf("    |%d", i+1);
@@ -193,7 +239,7 @@ void printArray(){
     for(int i = 0; i < maxValueVertice; i++){
         printf("%d", i+1);
         for(int j = 0; j < maxValueVertice; j++){
-            int val = vertices_2D_array[i*maxValueVertice + j];
+            int val = array[i*maxValueVertice + j];
             int sign = 2;
             if(val < 0){
                 val = (~val)+1;
@@ -206,11 +252,11 @@ void printArray(){
 
             if(val < 100){
                 if(val < 10){
-                    printf(" |%d%s ", vertices_2D_array[i*maxValueVertice + j], space);
+                    printf(" |%d%s ", array[i*maxValueVertice + j], space);
 
                 }
                 else{
-                    printf(" |%d%s", vertices_2D_array[i*maxValueVertice + j], space);
+                    printf(" |%d%s", array[i*maxValueVertice + j], space);
 
                 }
             }
@@ -238,6 +284,53 @@ void freeGraph(Edge_t *head){
 
 void freeArray(){
     free(vertices_2D_array);
+    free(path_2D_array);
+}
+
+void showPath(){
+    printf("Enter edge pair u,v to show path or type q to quit\n");
+    char input[20];
+    scanf("%s", input);
+    while(input[0] != 'q' && input[0] != 'Q'){
+        int u,v,len;
+        int *p;
+        int i = -1;
+        /* get u */
+        while(input[++i] != ',');
+        char vertice_u[i];
+        len = i;
+        while(i-- > 0)
+            vertice_u[i] = input[i];
+        u = atoi(vertice_u);
+        /* get v */
+        int start = len + 1;
+        len = strlen(input);
+        char vertice_v[len-start];
+        for(i = 0; i < len-start; i++)
+            vertice_v[i] = input[start+i];
+        v = atoi(vertice_v);
+        if(u < 1 || u > maxValueVertice){
+            printf("Vertice u: %d, does not exist\n", u);
+            break;
+        }
+        if(v < 1 || v > maxValueVertice){
+            printf("Vertice v: %d, does not exist\n", v);
+            break;
+        }
+        p = path(u,v);
+        len = p[0];
+        if(len == 0){
+            printf("No path found\n");
+        }
+        else{
+            printf("[");
+            for(int i = 1; i < len-1; i++)
+                printf("%d ", p[i]);
+            printf("%d]\n", p[len-1]);
+        }
+        memset(input, 0, sizeof(input));
+        scanf("%s", input);
+    }
 }
 
 int main(){
@@ -255,9 +348,10 @@ int main(){
     printGraph(head);
     initArray(head);
     freeGraph(head);
-    printArray();
+    printArray(vertices_2D_array);
     floydWarshall();
-    printArray();
+    printArray(vertices_2D_array);
+    showPath();
     freeArray();
 
     return 1;
